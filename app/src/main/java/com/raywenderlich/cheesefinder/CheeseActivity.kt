@@ -33,27 +33,36 @@ package com.raywenderlich.cheesefinder
 import android.os.Bundle
 import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
+import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_cheeses.*
 
 class CheeseActivity : BaseSearchActivity() {
+    private val disposables = CompositeDisposable()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val buttonObservable = createButtonClickObservable()
-        buttonObservable
-                .subscribeOn(AndroidSchedulers.mainThread())
-                .doOnNext { showProgress() }
-                .observeOn(Schedulers.io())
-                .map { query -> cheeseSearchEngine.search(query) }
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe { result ->
-                    hideProgress()
-                    showResult(result)
-                }
+        disposables.add(
+            buttonObservable
+                    .subscribeOn(AndroidSchedulers.mainThread())
+                    .doOnNext { showProgress() }
+                    .observeOn(Schedulers.io())
+                    .map { query -> cheeseSearchEngine.search(query) }
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe { result ->
+                        hideProgress()
+                        showResult(result)
+                    }
+        )
     }
 
-    fun createButtonClickObservable(): Observable<String> {
+    override fun onDestroy() {
+        super.onDestroy()
+        disposables.clear()
+    }
+
+    private fun createButtonClickObservable(): Observable<String> {
         return Observable.create { emitter ->
             searchButton.setOnClickListener {
                 emitter.onNext(queryEditText.text.toString())

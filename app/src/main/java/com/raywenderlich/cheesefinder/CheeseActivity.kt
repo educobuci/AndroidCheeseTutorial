@@ -31,11 +31,14 @@
 package com.raywenderlich.cheesefinder
 
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_cheeses.*
+import java.util.concurrent.TimeUnit
 
 class CheeseActivity : BaseSearchActivity() {
     private val disposables = CompositeDisposable()
@@ -43,9 +46,11 @@ class CheeseActivity : BaseSearchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val buttonObservable = createButtonClickObservable()
+        val textChangeObservable = createTextChangeObservable()
+        val searchTextObservable = Observable.merge(buttonObservable, textChangeObservable)
         disposables.add(
-            buttonObservable
-                    .subscribeOn(AndroidSchedulers.mainThread())
+            searchTextObservable
+                    .observeOn(AndroidSchedulers.mainThread())
                     .doOnNext { showProgress() }
                     .observeOn(Schedulers.io())
                     .map { query -> cheeseSearchEngine.search(query) }
@@ -71,5 +76,25 @@ class CheeseActivity : BaseSearchActivity() {
                 searchButton.setOnClickListener(null)
             }
         }
+    }
+
+    private fun createTextChangeObservable(): Observable<String> {
+        val textObservable = Observable.create<String> { emitter ->
+            var textWatcher = object: TextWatcher {
+                override fun afterTextChanged(s: Editable?) = Unit
+                override fun beforeTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
+                    s?.toString()?.let { emitter.onNext(it) }
+                }
+            }
+            queryEditText.addTextChangedListener(textWatcher)
+            emitter.setCancellable {
+                queryEditText.removeTextChangedListener(textWatcher)
+            }
+        }
+        return textObservable
+                .filter { it.length >= 2 }
+                .debounce(1000, TimeUnit.MILLISECONDS)
+
     }
 }
